@@ -29,20 +29,19 @@ const DATA_SOURCES = [
 
 async function fetchTrades() {
   for (const source of DATA_SOURCES) {
-    console.log(`📡 嘗試資料來源：${source.name}`)
+    console.log(`📡 嘗試：${source.name}`)
     try {
       const res = await fetch(source.url, {
         headers: { 'User-Agent': 'congress-tracker-bot/1.0' },
-        timeout: 30000,
       })
       if (!res.ok) { console.warn(`  ⚠️ HTTP ${res.status}`); continue }
       const raw = await res.json()
       const trades = source.parse(raw)
       if (!Array.isArray(trades) || trades.length === 0) continue
-      console.log(`  ✅ 成功取得 ${trades.length.toLocaleString()} 筆`)
+      console.log(`  ✅ 取得 ${trades.length.toLocaleString()} 筆`)
       return { trades, sourceName: source.name }
     } catch (err) {
-      console.warn(`  ❌ 錯誤：${err.message}`)
+      console.warn(`  ❌ ${err.message}`)
     }
   }
   throw new Error('所有資料來源均失敗')
@@ -78,12 +77,15 @@ function normalizeTrade(raw) {
 const BATCH_SIZE = 500
 
 async function upsertBatch(trades) {
-  const { error } = await supabase.from('congress_trades').upsert(trades, { onConflict: 'id', ignoreDuplicates: true })
+  const { error } = await supabase
+    .from('congress_trades')
+    .upsert(trades, { onConflict: 'id', ignoreDuplicates: true })
   if (error) throw error
 }
 
 async function syncToSupabase(trades) {
-Add sync.js  const normalized = trades.map(normalizeTrade).filter(t => t.id && t.representative)
+  const normalized = trades.map(normalizeTrade).filter(t => t.id && t.representative)
+  console.log(`📊 寫入 Supabase：${normalized.length.toLocaleString()} 筆`)
   let inserted = 0
   for (let i = 0; i < normalized.length; i += BATCH_SIZE) {
     await upsertBatch(normalized.slice(i, i + BATCH_SIZE))
@@ -95,14 +97,19 @@ Add sync.js  const normalized = trades.map(normalizeTrade).filter(t => t.id && t
 }
 
 async function main() {
-  console.log('🚀 開始同步國會交易資料')
+  console.log('🚀 開始同步')
   try {
     const { trades, sourceName } = await fetchTrades()
     const inserted = await syncToSupabase(trades)
-    await supabase.from('sync_meta').upsert({ id: 'latest', last_synced_at: new Date().toISOString(), total_trades: inserted, source: sourceName })
-    console.log(`\n✅ 同步完成！來源：${sourceName}，寫入：${inserted.toLocaleString()} 筆`)
+    await supabase.from('sync_meta').upsert({
+      id: 'latest',
+      last_synced_at: new Date().toISOString(),
+      total_trades: inserted,
+      source: sourceName,
+    })
+    console.log(`\n✅ 完成！來源：${sourceName}，寫入：${inserted.toLocaleString()} 筆`)
   } catch (err) {
-    console.error('\n❌ 同步失敗：', err.message)
+    console.error('\n❌ 失敗：', err.message)
     process.exit(1)
   }
 }
