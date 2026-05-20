@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>內幕流 · 國會交易追蹤</title>
+<script>
+// ★ 設定你的 Supabase 資訊 ★
+const CONFIG = {
+  SUPABASE_URL: 'https://wdvcyxbvayjswzvcvkoj.supabase.co',
+  SUPABASE_ANON_KEY: 'PASTE_YOUR_ANON_KEY_HERE',
+  PAGE_SIZE: 80,
+}
+</script>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{--bg:#0a0a0a;--bg2:#111;--bg3:#161616;--border:#1e1e1e;--border2:#2a2a2a;--text:#e8e4dc;--text2:#888;--text3:#444;--gold:#c8a84b;--gold2:#e8cc78;--green:#24a05a;--green-bg:rgba(36,160,90,.12);--green-border:rgba(36,160,90,.22);--red:#e05555;--red-bg:rgba(224,85,85,.12);--red-border:rgba(224,85,85,.22)}
+body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;min-height:100vh;font-size:14px}
+.nav{position:sticky;top:0;z-index:200;background:rgba(10,10,10,.94);backdrop-filter:blur(16px);border-bottom:1px solid var(--border);height:54px;display:flex;align-items:center;padding:0 20px;gap:20px}
+.logo{font-family:'IBM Plex Mono',monospace;font-size:14px;font-weight:600;color:var(--text)}
+.logo em{font-style:normal;color:var(--gold)}
+.sync-status{margin-left:auto;display:flex;align-items:center;gap:6px;font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--text3)}
+.dot{width:6px;height:6px;border-radius:50%;background:#444;flex-shrink:0}
+.dot.live{background:var(--green);box-shadow:0 0 6px var(--green);animation:pulse 2s infinite}
+.dot.err{background:var(--red)}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+.hero{max-width:860px;margin:0 auto;padding:56px 20px 40px;text-align:center;position:relative}
+.hero::before{content:'';position:absolute;top:0;left:50%;transform:translateX(-50%);width:500px;height:260px;background:radial-gradient(ellipse,rgba(200,168,75,.07) 0%,transparent 70%);pointer-events:none}
+.eyebrow{font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--gold);letter-spacing:2.5px;text-transform:uppercase;margin-bottom:18px}
+.hero h1{font-size:clamp(24px,4.5vw,40px);font-weight:600;line-height:1.2;letter-spacing:-.4px;margin-bottom:14px}
+.hero h1 em{font-style:normal;background:linear-gradient(130deg,var(--gold),var(--gold2));-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+.hero-sub{font-size:13px;color:var(--text3);max-width:500px;margin:0 auto 28px;line-height:1.65}
+.stats-wrap{max-width:860px;margin:0 auto;padding:0 20px 40px}
+.stats-bar{background:var(--bg2);border:1px solid var(--border);border-radius:12px;display:flex;overflow:hidden}
+.stat{flex:1;padding:20px;text-align:center;border-right:1px solid var(--border)}
+.stat:last-child{border-right:none}
+.stat-n{font-family:'IBM Plex Mono',monospace;font-size:26px;font-weight:600;color:var(--text);line-height:1;margin-bottom:5px}
+.stat-l{font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:1.5px}
+.stats-note{margin-top:8px;font-family:'IBM Plex Mono',monospace;font-size:10px;color:#333;text-align:center}
+.controls-wrap{max-width:860px;margin:0 auto;padding:0 20px 20px}
+.controls{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.search-box{flex:1;min-width:180px;background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:8px 14px;font-size:12px;color:var(--text);font-family:'DM Sans',sans-serif;outline:none;transition:border-color .15s}
+.search-box::placeholder{color:var(--text3)}
+.search-box:focus{border-color:var(--border2)}
+.filter-btn{padding:8px 16px;background:var(--bg2);border:1px solid var(--border);border-radius:8px;font-size:12px;color:var(--text2);cursor:pointer;font-family:'DM Sans',sans-serif;transition:all .15s;white-space:nowrap}
+.filter-btn.active-buy{background:var(--green-bg);border-color:var(--green-border);color:var(--green)}
+.filter-btn.active-sell{background:var(--red-bg);border-color:var(--red-border);color:var(--red)}
+.filter-btn.active-all{border-color:var(--gold);color:var(--gold)}
+.count-label{font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--text3);margin-left:auto;white-space:nowrap}
+.trades-wrap{max-width:860px;margin:0 auto;padding:0 20px 60px}
+.trades-table{background:var(--bg2);border:1px solid var(--border);border-radius:12px;overflow:hidden}
+.table-header{display:grid;grid-template-columns:90px 1fr 120px 100px 80px 80px;padding:10px 16px;border-bottom:1px solid var(--border);background:var(--bg3)}
+.th{font-family:'IBM Plex Mono',monospace;font-size:9px;font-weight:500;color:var(--text3);text-transform:uppercase;letter-spacing:1.2px}
+.th.right{text-align:right}
+.trade-row-item{display:grid;grid-template-columns:90px 1fr 120px 100px 80px 80px;padding:12px 16px;border-bottom:1px solid #141414;align-items:center;transition:background .12s;cursor:pointer}
+.trade-row-item:last-child{border-bottom:none}
+.trade-row-item:hover{background:#141414}
+.trade-row-item.buy-row{border-left:2px solid rgba(36,160,90,.3)}
+.trade-row-item.sell-row{border-left:2px solid rgba(224,85,85,.3)}
+.badge{display:inline-flex;align-items:center;font-family:'IBM Plex Mono',monospace;font-size:9px;font-weight:600;padding:3px 7px;border-radius:4px;letter-spacing:.5px}
+.badge.buy{background:var(--green-bg);color:var(--green);border:1px solid var(--green-border)}
+.badge.sell{background:var(--red-bg);color:var(--red);border:1px solid var(--red-border)}
+.person-cell{display:flex;align-items:center;gap:10px}
+.avatar{width:30px;height:30px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-family:'IBM Plex Mono',monospace;font-size:10px;font-weight:600;color:#fff;flex-shrink:0}
+.p-name{font-size:12px;font-weight:500;color:var(--text);margin-bottom:1px}
+.p-meta{font-size:10px;color:var(--text3)}
+.amount-cell{font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--text2);text-align:right}
+.date-cell{font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--text3);text-align:right}
+.loading-state{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:60px 20px;gap:14px}
+.spinner{width:28px;height:28px;border-radius:50%;border:2px solid var(--border);border-top-color:var(--gold);animation:spin .8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.loading-text{font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--text3)}
+.load-more-btn{display:block;width:100%;margin-top:12px;padding:12px;background:none;border:1px dashed var(--border);border-radius:10px;font-size:11px;color:var(--text3);cursor:pointer;font-family:'IBM Plex Mono',monospace;transition:all .2s;text-align:center}
+.load-more-btn:hover{border-color:var(--gold);color:var(--gold)}
+.config-banner{max-width:860px;margin:0 auto 20px;padding:0 20px}
+.config-box{background:rgba(200,168,75,.06);border:1px solid rgba(200,168,75,.2);border-radius:10px;padding:16px 20px;font-size:12px;color:var(--text3);line-height:1.7}
+.config-box strong{color:var(--gold)}
+.config-box code{font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--text2);background:rgba(255,255,255,.05);padding:1px 5px;border-radius:3px}
+.footer{border-top:1px solid #131313;padding:28px 20px;max-width:860px;margin:0 auto;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px}
+.footer-copy{font-family:'IBM Plex Mono',monospace;font-size:10px;color:#2a2a2a}
+.footer-note{font-size:10px;color:#222;max-width:380px;line-height:1.5;text-align:right}
+@media(max-width:640px){.table-header,.trade-row-item{grid-template-columns:70px 1fr 80px 70px}.th:nth-child(5),.th:nth-child(6),.trade-row-item>*:nth-child(5),.trade-row-item>*:nth-child(6){display:none}}
+</style>
+</head>
+<body>
+<div id="config-banner" class="config-banner" style="display:none">
+  <div class="config-box">
+    <strong>⚙️ 需要設定 anon key</strong><br>
+    請開啟此檔案，找到頂部 <code>PASTE_YOUR_ANON_KEY_HERE</code>，替換成你的 Supabase anon key。<br>
+    位置：Supabase > Project Settings > API Keys > Legacy > <strong>anon public</strong>
+  </div>
+</div>
+<nav class="nav">
+  <div class="logo">內幕流 <em>·</em> Congress Tracker</div>
+  <div class="sync-status">
+    <div class="dot" id="dot"></div>
+    <span id="sync-label">連線中...</span>
+  </div>
+</nav>
+<div class="hero">
+  <div class="eyebrow">美國國會 STOCK 披露 · 每日同步</div>
+  <h1>把<em>國會資金流</em><br/>變成你的選股雷達</h1>
+  <p class="hero-sub">資料每日由 GitHub Actions 自動同步，儲存於你的 Supabase，完全免費</p>
+</div>
+<div class="stats-wrap">
+  <div class="stats-bar">
+    <div class="stat"><div class="stat-n" id="stat-total">—</div><div class="stat-l">總交易筆數</div></div>
+    <div class="stat"><div class="stat-n" id="stat-reps">—</div><div class="stat-l">議員人數</div></div>
+    <div class="stat"><div class="stat-n" id="stat-buy">—</div><div class="stat-l">買入筆數</div></div>
+    <div class="stat"><div class="stat-n" id="stat-sell">—</div><div class="stat-l">賣出筆數</div></div>
+  </div>
+  <div class="stats-note" id="stats-note">正在連線 Supabase...</div>
+</div>
+<div class="controls-wrap">
+  <div class="controls">
+    <input class="search-box" type="text" id="search-input" placeholder="搜尋議員姓名或股票代號 (e.g. NVDA, Pelosi)">
+    <button class="filter-btn active-all" id="btn-all" onclick="setFilter('all')">全部</button>
+    <button class="filter-btn" id="btn-buy" onclick="setFilter('buy')">🟢 買入</button>
+    <button class="filter-btn" id="btn-sell" onclick="setFilter('sell')">🔴 賣出</button>
+    <div class="count-label" id="count-label">—</div>
+  </div>
+</div>
+<div class="trades-wrap">
+  <div class="trades-table">
+    <div class="table-header">
+      <div class="th">類型</div><div class="th">議員</div><div class="th">股票代號</div>
+      <div class="th right">交易規模</div><div class="th right">交易日</div><div class="th right">披露日</div>
+    </div>
+    <div id="trades-body"><div class="loading-state"><div class="spinner"></div><div class="loading-text">連線中...</div></div></div>
+  </div>
+  <button class="load-more-btn" id="load-more" style="display:none" onclick="loadMore()">載入更多 ↓</button>
+</div>
+<footer class="footer">
+  <div class="footer-copy">內幕流 · Powered by Supabase + GitHub Actions</div>
+  <div class="footer-note">不構成投資建議。Data from STOCK Act disclosures.</div>
+</footer>
+<script>
+const isConfigured = CONFIG.SUPABASE_ANON_KEY !== 'PASTE_YOUR_ANON_KEY_HERE';
+if (!isConfigured) {
+  document.getElementById('config-banner').style.display = 'block';
+  document.getElementById('dot').classList.add('err');
+  document.getElementById('sync-label').textContent = '未設定';
+  document.getElementById('trades-body').innerHTML = '<div class="loading-state"><div style="font-size:28px">⚙️</div><div class="loading-text">請填入 Supabase anon key 後重新整理</div></div>';
+}
+const COLORS = ['#2e5a8c','#8c2e2e','#2e7d5e','#7b4a8c','#8c5c2e','#4a6fa5','#5a8c2e','#8c6b2e'];
+const colorCache = {};
+function getColor(n){if(!colorCache[n])colorCache[n]=COLORS[Object.keys(colorCache).length%COLORS.length];return colorCache[n];}
+function initials(n){const p=(n||'??').trim().split(/\s+/);return p.length>=2?(p[0][0]+p[p.length-1][0]).toUpperCase():(n||'??').slice(0,2).toUpperCase();}
+function fmtDate(s){if(!s)return '—';return s.slice(0,10).replace(/-/g,'/');}
+function fmtAmt(a){if(!a)return '—';return a.replace('\$1,001 - \$15,000','\$1K–\$15K').replace('\$15,001 - \$50,000','\$15K–\$50K').replace('\$50,001 - \$100,000','\$50K–\$100K').replace('\$100,001 - \$250,000','\$100K–\$250K').replace('\$250,001 - \$500,000','\$250K–\$500K').replace('\$500,001 - \$1,000,000','\$500K–\$1M').replace('\$1,000,001 - \$5,000,000','\$1M–\$5M');}
+function isBuy(t){if(!t)return null;const l=t.toLowerCase();if(l.includes('purchase')||l.includes('buy'))return true;if(l.includes('sale')||l.includes('sell'))return false;return null;}
+function anim(id,target){const el=document.getElementById(id);let cur=0;const step=Math.ceil(target/40);const ti=setInterval(()=>{cur=Math.min(cur+step,target);el.textContent=cur.toLocaleString();if(cur>=target)clearInterval(ti);},25);}
+const BASE=CONFIG.SUPABASE_URL+'/rest/v1';
+const HEADERS={'apikey':CONFIG.SUPABASE_ANON_KEY,'Authorization':'Bearer '+CONFIG.SUPABASE_ANON_KEY,'Content-Type':'application/json'};
+async function sbFetch(path){const res=await fetch(BASE+path,{headers:HEADERS});if(!res.ok)throw new Error('Supabase '+res.status+': '+await res.text());return res.json();}
+async function loadStats(){
+  const [totalRes,buysRes,sellsRes,repsRes,metaRes]=await Promise.all([
+    fetch(BASE+'/congress_trades?select=id&limit=1',{headers:{...HEADERS,'Prefer':'count=exact','Range':'0-0'}}),
+    fetch(BASE+'/congress_trades?select=id&trade_type=ilike.*purchase*&limit=1',{headers:{...HEADERS,'Prefer':'count=exact','Range':'0-0'}}),
+    fetch(BASE+'/congress_trades?select=id&trade_type=ilike.*sale*&limit=1',{headers:{...HEADERS,'Prefer':'count=exact','Range':'0-0'}}),
+    sbFetch('/congress_trades?select=representative&limit=5000'),
+    sbFetch('/sync_meta?id=eq.latest&select=*'),
+  ]);
+  const total=parseInt(totalRes.headers.get('Content-Range')?.split('/')[1]||'0');
+  const buys=parseInt(buysRes.headers.get('Content-Range')?.split('/')[1]||'0');
+  const sells=parseInt(sellsRes.headers.get('Content-Range')?.split('/')[1]||'0');
+  const reps=new Set((await repsRes.json()).map(r=>r.representative)).size;
+  const meta=(await metaRes)[0]||{};
+  anim('stat-total',total);anim('stat-reps',reps);anim('stat-buy',buys);anim('stat-sell',sells);
+  const syncDate=meta.last_synced_at?new Date(meta.last_synced_at).toLocaleDateString('zh-Hant-TW'):'未知';
+  document.getElementById('stats-note').textContent='最後同步：'+syncDate+' · 來源：'+( meta.source||'N/A');
+}
+let currentPage=0,currentFilter='all',currentSearch='',tradeBuffer=[],hasMore=true;
+function buildQuery(page){
+  const ps=CONFIG.PAGE_SIZE,offset=page*ps;
+  let p='?select=*&order=disclosure_date.desc,transaction_date.desc&limit='+ps+'&offset='+offset;
+  if(currentFilter==='buy')p+='&trade_type=ilike.*purchase*';
+  if(currentFilter==='sell')p+='&trade_type=ilike.*sale*';
+  if(currentSearch.trim())p+='&or=(representative.ilike.*'+encodeURIComponent(currentSearch.trim())+'*,ticker.ilike.*'+encodeURIComponent(currentSearch.trim())+'*)';
+  return '/congress_trades'+p;
+}
+async function fetchPage(reset=false){
+  if(reset){currentPage=0;tradeBuffer=[];hasMore=true;document.getElementById('trades-body').innerHTML='<div class="loading-state"><div class="spinner"></div><div class="loading-text">載入中...</div></div>';}
+  const data=await sbFetch(buildQuery(currentPage));
+  hasMore=data.length===CONFIG.PAGE_SIZE;
+  tradeBuffer=reset?data:[...tradeBuffer,...data];
+  currentPage++;
+  renderTrades();
+}
+function renderTrades(){
+  const body=document.getElementById('trades-body');
+  if(!tradeBuffer.length){body.innerHTML='<div class="loading-state"><div>🔍</div><div class="loading-text">找不到符合的交易</div></div>';document.getElementById('load-more').style.display='none';document.getElementById('count-label').textContent='0 筆';return;}
+  body.innerHTML=tradeBuffer.map(t=>{
+    const buy=isBuy(t.trade_type),rc=buy===true?'buy-row':buy===false?'sell-row':'',bl=buy===true?'BUY':buy===false?'SELL':(t.trade_type||'—').slice(0,6),bc=buy===true?'buy':buy===false?'sell':'',nm=t.representative||'Unknown',tk=t.ticker?'<span style="color:var(--gold);font-family:IBM Plex Mono,monospace;font-size:12px;font-weight:500">'+t.ticker+'</span>':'<span style="color:var(--text3);font-size:10px">N/A</span>';
+    return '<div class="trade-row-item '+rc+'"><div><span class="badge '+bc+'">'+bl+'</span></div><div class="person-cell"><div class="avatar" style="background:'+getColor(nm)+'">'+initials(nm)+'</div><div><div class="p-name">'+nm+'</div><div class="p-meta">'+(t.district||t.state||'—')+'</div></div></div><div>'+tk+'<div style="font-size:10px;color:var(--text3);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:110px">'+(t.asset_description||'').slice(0,22)+'</div></div><div class="amount-cell">'+fmtAmt(t.amount||'')+'</div><div class="date-cell">'+fmtDate(t.transaction_date)+'</div><div class="date-cell">'+fmtDate(t.disclosure_date)+'</div></div>';
+  }).join('');
+  const lb=document.getElementById('load-more');
+  lb.style.display=hasMore?'block':'none';
+  if(hasMore)lb.textContent='載入更多 ↓';
+  document.getElementById('count-label').textContent='顯示 '+tradeBuffer.length.toLocaleString()+' 筆';
+}
+function loadMore(){fetchPage();}
+function setFilter(f){currentFilter=f;['all','buy','sell'].forEach(x=>{document.getElementById('btn-'+x).className='filter-btn'+(x===f?' active-'+x:'');});fetchPage(true);}
+let searchTimer;
+document.getElementById('search-input').addEventListener('input',e=>{clearTimeout(searchTimer);searchTimer=setTimeout(()=>{currentSearch=e.target.value;fetchPage(true);},300);});
+async function init(){
+  if(!isConfigured)return;
+  try{
+    await Promise.all([loadStats(),fetchPage(true)]);
+    document.getElementById('dot').classList.add('live');
+    document.getElementById('sync-label').textContent='已連線';
+  }catch(err){
+    document.getElementById('dot').classList.add('err');
+    document.getElementById('sync-label').textContent='連線失敗';
+    document.getElementById('stats-note').textContent='錯誤：'+err.message;
+    document.getElementById('trades-body').innerHTML='<div class="loading-state"><div style="font-size:28px">⚠️</div><div class="loading-text">'+err.message+'</div><button style="margin-top:12px;padding:8px 20px;background:none;border:1px solid #2a2a2a;border-radius:8px;color:#888;font-size:12px;cursor:pointer" onclick="init()">重試</button></div>';
+  }
+}
+init();
+</script>
+</body>
+</html>
